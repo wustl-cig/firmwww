@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="gray">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Colour theme: change data-theme on <html> above to "cream", "gray" or "teal".
+     To preview without editing, open the page with ?theme=gray (or cream / teal). -->
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t && /^(cream|gray|teal)$/.test(t)) document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+
+<title>FIRM: Flow-based Imaging via Regularized Minimization</title>
+<meta name="description" content="FIRM learns an operator-aware measurement-conditional velocity field for imaging inverse problems, making explicit data consistency part of every velocity evaluation with no separate guidance at sampling. Leading reconstruction quality with up to 50x fewer network evaluations.">
+<meta name="keywords" content="flow matching, inverse problems, computational imaging, conditional velocity field, plug-and-play, half-quadratic splitting, posterior sampling">
+
+<!-- Open Graph / social preview. Replace the URL once the page is live. -->
+<meta property="og:title" content="FIRM: Flow-based Imaging via Regularized Minimization">
+<meta property="og:description" content="An operator-aware conditional velocity field that makes explicit data consistency part of the generative dynamics. Leading reconstruction quality at up to 50x fewer NFEs.">
+<meta property="og:image" content="./static/images/fig2_celeba_qualitative.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%233c4450'/><path d='M20 46V18h26v8H29v6h14v8H29v6z' fill='%23fff'/></svg>">
+<meta name="theme-color" content="#23262a">
+
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+<link rel="stylesheet" href="./static/css/index.css">
+
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']] },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+  };
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script defer src="./static/js/index.js"></script>
+</head>
+
+<body>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+  <div class="container center">
+
+    <h1 class="publication-title">FIRM: Flow-based Imaging via<br>Regularized Minimization</h1>
+    <p class="publication-subtitle">An operator-aware conditional velocity field, trained end-to-end</p>
+
+    <!-- Add personal homepages here, e.g. <a href="https://...">Shirin Shoushtari</a> -->
+    <div class="publication-authors">
+      <span class="author-block">Shirin Shoushtari<sup>1</sup>,</span>
+      <span class="author-block">Edward P. Chandler<sup>2</sup>,</span>
+      <span class="author-block">Xiao Shi<sup>2</sup>,</span>
+      <span class="author-block">Ulugbek S. Kamilov<sup>2</sup></span>
+    </div>
+
+    <div class="publication-authors affiliations">
+      <span class="author-block"><sup>1</sup>WashU</span>
+      <span class="author-block"><sup>2</sup>UW-Madison</span>
+    </div>
+
+    <!-- Swap for the venue once the paper is accepted, e.g. "ICLR 2026". -->
+    <div style="margin-top: 0.8rem;"><span class="badge">Preprint</span></div>
+
+    <div class="publication-links">
+      <a class="link-button" href="./static/pdfs/firm_paper.pdf">
+        <span class="icon"><i class="fas fa-file-pdf"></i></span><span>Paper</span>
+      </a>
+      <a class="link-button" href="https://arxiv.org/abs/2609.12953">
+        <span class="icon"><i class="ai ai-arxiv"></i></span><span>arXiv</span>
+      </a>
+      <a class="link-button" href="https://github.com/wustl-cig/FIRM_code">
+        <span class="icon"><i class="fab fa-github"></i></span><span>Code</span>
+      </a>
+      <a class="link-button" href="#BibTeX">
+        <span class="icon"><i class="fas fa-quote-left"></i></span><span>BibTeX</span>
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== TEASER ==================== -->
+<section class="teaser">
+  <div class="container wide center">
+    <div class="teaser-wrapper">
+      <img id="teaser" src="./static/images/teaser_small.jpg"
+           data-full="./static/images/fig2_celeba_qualitative.jpg"
+           alt="Qualitative reconstructions on CelebA for super-resolution, random inpainting and box inpainting.">
+    </div>
+    <p class="caption">
+      <b>Qualitative reconstructions on CelebA.</b> Values below each panel report PSNR/SSIM/LPIPS,
+      and the insets show a zoomed crop next to its error map. FIRM recovers detail the baselines
+      miss while using only $N\!=\!2$ ODE steps. <i>Click the figure to enlarge.</i>
+    </p>
+
+    <div class="stats">
+      <div class="stat"><div class="num">up to 50&times;</div><div class="lab">fewer network evaluations than competitive flow-based methods</div></div>
+      <div class="stat"><div class="num">0.24 s</div><div class="lab">per image at the best distortion setting (vs. 13.03 s)</div></div>
+      <div class="stat"><div class="num">10</div><div class="lab">NFEs at $N\!=\!2$, $K\!=\!5$&mdash;no inference-time guidance</div></div>
+      <div class="stat"><div class="num">1 model</div><div class="lab">spans the distortion&ndash;perception trade-off, no retraining</div></div>
+    </div>
+  </div>
+</section>
+
+<div id="lightbox">
+  <img src="./static/images/fig2_celeba_qualitative.jpg" alt="Full resolution qualitative results">
+  <div class="hint">click anywhere or press Esc to close</div>
+</div>
+
+<!-- ==================== ABSTRACT ==================== -->
+<section class="section">
+  <div class="container">
+    <div class="card fade-in">
+      <h2 class="title">Abstract</h2>
+      <div class="narrow justify">
+        <p>
+          Flow matching methods for imaging inverse problems typically incorporate measurements through network
+          conditioning or guidance during sampling. Neither approach explicitly applies the forward operator within
+          the learned conditional velocity field. We develop a principled measurement-conditional velocity
+          parameterization that does. For a linear interpolation path, we express the optimal velocity through the
+          posterior mean $\mathbb{E}[x_1 \mid x_t, y]$ and show that this mean is the unique minimizer of a variational
+          objective with an explicit data-consistency term. The velocity defined by this minimizer provably transports
+          the source distribution to the measurement-conditioned posterior. This result leads to a forward
+          operator-aware velocity field that is trained end-to-end and requires no separate guidance during sampling.
+          Across five imaging tasks, our method achieves leading reconstruction quality with up to 50&times; fewer
+          network evaluations than competitive flow-based methods. Varying the number of sampling steps also controls
+          the distortion&ndash;perception trade-off without retraining.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== METHOD ==================== -->
+<section class="section" id="method">
+  <div class="container wide">
+    <div class="card fade-in">
+      <h2 class="title">Method</h2>
+
+      <div class="narrow justify">
+        <h3 class="subtitle">The conditional velocity is a posterior mean</h3>
+        <p>
+          Under linear interpolation $x_t = t x_1 + (1-t) x_0$, the state $x_t$ and the measurement $y = Ax_1 + \eta$
+          are two <em>conditionally independent</em> noisy observations of the same clean image $x_1$. Stacking them
+          gives an augmented observation model whose MMSE estimator is exactly the measurement-conditioned posterior
+          mean, and that mean determines the optimal conditional velocity:
+        </p>
+        <div class="eq-card">
+          $$ v(x_t, t, y) \;=\; \frac{\mathbb{E}[x_1 \mid x_t, y] - x_t}{1 - t}. $$
+        </div>
+
+        <h3 class="subtitle">A variational characterization with explicit data consistency</h3>
+        <p>
+          Our main theoretical result (Proposition&nbsp;1) shows that for a non-degenerate $p_1$ with bounded support,
+          $\sigma &gt; 0$ and $t \in (0,1)$, there is a regularizer $\phi_t$&mdash;unique up to an additive constant&mdash;for which the posterior mean is the <em>unique</em> global minimizer and unique stationary point of
+        </p>
+        <div class="eq-card">
+          $$ \mathbb{E}[x_1 \mid x_t, y] \;=\; \arg\min_{x \in \mathbb{R}^n}\;
+             \frac{1}{2(1-t)^2}\lVert x_t - t x \rVert_2^2
+             \;+\; \frac{1}{2\sigma^2}\lVert y - A x \rVert_2^2
+             \;+\; \phi_t(x). $$
+        </div>
+        <p>
+          The first quadratic enforces interpolation consistency, the second enforces <em>measurement</em> consistency
+          explicitly, and $\phi_t$ absorbs whatever structure remains. We further prove that this velocity satisfies the
+          conditional continuity equation $\partial_t p_t(x \mid y) + \nabla \cdot \big(p_t(x \mid y) v(x,t,y)\big) = 0$,
+          so the induced flow transports the Gaussian source to $p_\tau(\cdot \mid y)$, which converges weakly to the
+          measurement-conditioned posterior $p(x_1 \mid y)$ as $\tau \to 1^-$. Data consistency becomes part of the
+          generative dynamics rather than an external sampling correction.
+        </p>
+
+        <h3 class="subtitle">An operator-aware conditional velocity</h3>
+        <p>
+          $\phi_t$ is not available in closed form, so we split the objective with half-quadratic splitting and
+          alternate the two resulting updates. The $x$-update is a closed-form data-consistency solve that depends on
+          $A$ and $y$; the $z$-update combines interpolation consistency with the implicit regularizer and is replaced
+          by a learned estimator $R_\theta$, damped toward the data-consistent iterate. After $K$ iterations the output
+          $z_\theta^K(x_t, t, y)$ estimates the posterior mean and defines the learned velocity.
+        </p>
+        <p>
+          The whole estimator is trained end-to-end with a weighted flow-matching loss, using a stabilized time scale
+          $\tau_t = \max(1 - t, \tau_{\min})$ that keeps the velocity bounded near $t = 1$:
+        </p>
+        <div class="eq-card">
+          $$ \mathcal{L}(\theta) = \mathbb{E}_{x_1, x_0, t, y}\Big[\omega(t)\,
+             \lVert v_\theta(x_t,t,y) - v_{\text{target}} \rVert^2 \Big],
+             \qquad \omega(t) = \frac{1 + \tau_t^3}{\tau_t}. $$
+        </div>
+        <p>
+          The result is an <strong>operator-aware</strong> velocity field: every inner iteration of every velocity
+          evaluation applies $A$ and $A^{\top}$ through the data-consistency solve, so data consistency is learned as
+          part of the dynamics rather than imposed afterwards. Sampling therefore needs <strong>no guidance term, no
+          projection, and no proximal correction at inference</strong>&mdash;just $N$ explicit Euler steps.
+        </p>
+      </div>
+
+      <h3 class="subtitle" style="text-align:center; border:0; padding:0; margin-top:2.25rem;">Algorithms</h3>
+      <div class="algo-grid">
+        <div class="algo">
+          <span class="algo-name">Training</span>
+          <code><span class="cm">require: A, &sigma;, [t<sub>min</sub>, t<sub>max</sub>], &tau;<sub>min</sub></span><br>
+          <span class="kw">repeat</span><br>
+          &nbsp;&nbsp;x&#8321; ~ p&#8321;, &nbsp; x&#8320; ~ N(0,I), &nbsp; t ~ U[t<sub>min</sub>, t<sub>max</sub>]<br>
+          &nbsp;&nbsp;&eta; ~ N(0, &sigma;&sup2;I), &nbsp; y &larr; A x&#8321; + &eta;<br>
+          &nbsp;&nbsp;x&#8348; &larr; t x&#8321; + (1&minus;t) x&#8320;, &nbsp; &tau;&#8348; = max(1&minus;t, &tau;<sub>min</sub>)<br>
+          &nbsp;&nbsp;z<sup>K</sup> &larr; PostMean(x&#8348;, t, y, A)<br>
+          &nbsp;&nbsp;v<sub>&theta;</sub> &larr; (z<sup>K</sup> &minus; x&#8348;) / &tau;&#8348;<br>
+          &nbsp;&nbsp;v<sub>target</sub> &larr; (x&#8321; &minus; x&#8348;) / &tau;&#8348;<br>
+          &nbsp;&nbsp;update &theta; with the weighted FM loss<br>
+          <span class="kw">until</span> convergence</code>
+        </div>
+
+        <div class="algo">
+          <span class="algo-name">Sampling</span>
+          <code><span class="cm">require: y, A, trained model, step count N</span><br>
+          x&#8320; ~ N(0, I)<br>
+          &Delta;t &larr; 1 / N<br>
+          <span class="kw">for</span> i = 0 &hellip; N&minus;1 <span class="kw">do</span><br>
+          &nbsp;&nbsp;t&#7522; &larr; i &Delta;t<br>
+          &nbsp;&nbsp;z<sup>K</sup><sub>i</sub> &larr; PostMean(x&#7522;, t&#7522;, y, A)<br>
+          &nbsp;&nbsp;v&#7522; &larr; (z<sup>K</sup><sub>i</sub> &minus; x&#7522;) / (1 &minus; t&#7522;)<br>
+          &nbsp;&nbsp;x&#7522;&#8314;&#185; &larr; x&#7522; + &Delta;t &middot; v&#7522;<br>
+          <span class="kw">return</span> x<sub>N</sub><br>
+          <span class="cm">&nbsp;</span><br>
+          <span class="cm">no guidance, no projection, no proximal step</span></code>
+        </div>
+
+        <div class="algo">
+          <span class="algo-name">PostMean&mdash;operator-aware posterior mean</span>
+          <code><span class="cm">require: x&#8348;, t &lt; 1, y, A, R&theta;, K, &rho;, &beta;</span><br>
+          z&#8304; &larr; x&#8348;<br>
+          <span class="kw">for</span> k = 0 &hellip; K&minus;1 <span class="kw">do</span><br>
+          &nbsp;&nbsp;x&#7503;&#8314;&#185; &larr; (A&#7488;A + &rho;I)&#8315;&#185; (A&#7488;y + &rho; z&#7503;)<br>
+          &nbsp;&nbsp;&#7825;&#7503;&#8314;&#185; &larr; R&theta;(x&#7503;&#8314;&#185;, x&#8348;, t)<br>
+          &nbsp;&nbsp;z&#7503;&#8314;&#185; &larr; (1&minus;&beta;) x&#7503;&#8314;&#185; + &beta; &#7825;&#7503;&#8314;&#185;<br>
+          <span class="kw">return</span> z<sup>K</sup><br>
+          <span class="cm">&nbsp;</span><br>
+          <span class="cm">&theta; enters only through R&theta;; each call costs</span><br>
+          <span class="cm">K solves + K network evaluations</span></code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== QUALITATIVE RESULTS ==================== -->
+<section class="section" id="results">
+  <div class="container wide">
+    <div class="card fade-in" data-tabgroup="qual">
+      <h2 class="title">Qualitative Results</h2>
+
+      <div class="tabs">
+        <button class="tab active" data-target="q-celeba"><i class="fas fa-user"></i> CelebA</button>
+        <button class="tab" data-target="q-afhq"><i class="fas fa-cat"></i> AFHQ-Cat</button>
+        <button class="tab" data-target="q-fourier"><i class="fas fa-magnet"></i> Fourier CS</button>
+      </div>
+
+      <div class="panel active" id="q-celeba">
+        <figure>
+          <img src="./static/images/fig2_celeba_qualitative.jpg" loading="lazy"
+               alt="CelebA reconstructions for super-resolution, random inpainting and box inpainting">
+          <figcaption class="caption">
+            <b>CelebA, 128&times;128.</b> Super-resolution, random inpainting and box inpainting.
+            Values below each panel report PSNR/SSIM/LPIPS. FIRM recovers details the baselines fail to recover
+            while requiring only $N\!=\!2$ ODE steps.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="panel" id="q-afhq">
+        <figure>
+          <img src="./static/images/fig1_afhq_qualitative.jpg" loading="lazy"
+               alt="AFHQ-Cat reconstructions for denoising and deblurring">
+          <figcaption class="caption">
+            <b>AFHQ-Cat, 256&times;256.</b> Denoising (top) and deblurring (bottom).
+            FIRM preserves fine image detail&mdash;whiskers, fur texture&mdash;and produces faithful
+            reconstructions using only $N\!=\!2$ sampling steps.
+          </figcaption>
+        </figure>
+      </div>
+
+
+      <div class="panel" id="q-fourier">
+        <figure>
+          <img src="./static/images/fig17_fourier_cs.jpg" loading="lazy"
+               alt="Compressed-sensing Fourier reconstruction on AFHQ-Cat">
+          <figcaption class="caption">
+            <b>Compressed-sensing Fourier sampling</b> on AFHQ-Cat (256&times;256), $\sigma = 0.002$, with a Cartesian
+            mask retaining 21.88% of frequencies. Columns: ground truth, the zero-filled adjoint $A^{*}y$, Flower1-OT,
+            and ours at $N\!=\!2$. The data-consistency solve is available in closed form for subsampled Fourier
+            measurements, so the same construction carries over unchanged.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== EFFICIENCY ==================== -->
+<section class="section" id="efficiency">
+  <div class="container wide">
+    <div class="card fade-in">
+      <h2 class="title">Inference Cost</h2>
+      <div class="narrow justify">
+        <p>
+          Inference cost is $O(NK)$: $N$ ODE steps, each calling the posterior-mean estimator with $K = 5$ inner
+          iterations. The default $N\!=\!2$ configuration therefore uses <strong>10 network evaluations</strong>.
+          Per-NFE cost is comparable to PnP-Flow and Flower, but FIRM needs 50&times; fewer of them&mdash;reconstructing
+          an image in 0.24&nbsp;s against 13.03&nbsp;s for Flower5-OT. Peak memory is higher than PnP-Flow and Flower
+          because intermediate iterates are retained, but far below the remaining baselines. The speedup stems from
+          learning data consistency during training rather than enforcing it at inference.
+        </p>
+      </div>
+
+      <figure style="margin-top: 1.5rem;">
+        <img src="./static/images/fig10_psnr_vs_cost.png" loading="lazy" style="max-width: 700px;"
+             alt="PSNR versus wall-clock time per image; FIRM sits up and to the left of every baseline">
+        <figcaption class="caption">
+          PSNR averaged over the five CelebA restoration tasks against per-image wall-clock time (log scale,
+          single NVIDIA RTX A6000). Up and to the left is better. Our curve sweeps $N \in \{2,4,10,25\}$ at fixed
+          $K\!=\!5$; each baseline contributes one point. At $N\!=\!2$ we exceed the strongest baseline at roughly
+          50&times; lower cost.
+        </figcaption>
+      </figure>
+
+      <h3 class="subtitle" style="text-align:center; border:0; padding:0;">Time, memory and NFEs&mdash;CelebA deblurring</h3>
+      <div class="table-scroll">
+        <table class="results compact"><thead><tr class="metrics"><th>Metric</th><th>OT-ODE</th><th>D-Flow</th><th>Flow&nbsp;Priors</th><th>PnP-Flow1</th><th>PnP-Flow5</th><th>Flower1</th><th>Flower5</th><th>Ours (N=2)</th><th>Ours (N=4)</th><th>Ours (N=10)</th><th>Ours (N=25)</th></tr></thead><tbody><tr><td>Time (s) &darr;</td><td>6.37</td><td>299.25</td><td>41.27</td><td>2.33</td><td>11.46</td><td>2.67</td><td>13.03</td><td class="best">0.24</td><td class="second">0.50</td><td>1.21</td><td>3.13</td></tr><tr><td>Peak memory (MB) &darr;</td><td>743</td><td>6,124</td><td>2,728</td><td class="best">192</td><td class="best">192</td><td class="second">193</td><td>193</td><td>331</td><td>331</td><td>331</td><td>331</td></tr><tr><td>NFEs &darr;</td><td>180</td><td>&ndash;</td><td>100</td><td>100</td><td>500</td><td>100</td><td>500</td><td class="best">10</td><td class="second">20</td><td>50</td><td>125</td></tr></tbody></table>
+      </div>
+      <p class="legend">
+        Averaged over 10 images on a single NVIDIA RTX A6000.
+        <span class="sw-best">Best</span> and <span class="sw-second">second best</span> are highlighted.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== DISTORTION-PERCEPTION ==================== -->
+<section class="section" id="tradeoff">
+  <div class="container wide">
+    <div class="card fade-in" data-tabgroup="tradeoff">
+      <h2 class="title">Distortion&ndash;Perception Control at Test Time</h2>
+      <div class="narrow justify">
+        <p>
+          The number of Euler steps $N$ is a free knob at inference. Coarse integration lands near the
+          measurement-conditioned posterior <em>mean</em>, favouring PSNR and SSIM; finer integration moves toward
+          perceptually realistic <em>samples</em>, favouring LPIPS. A single trained model therefore spans both regimes&mdash;no retraining, no reweighting of the loss.
+        </p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-target="t-steps"><i class="fas fa-sliders"></i> Effect of N</button>
+        <button class="tab" data-target="t-celeba"><i class="fas fa-user"></i> CelebA sweep</button>
+        <button class="tab" data-target="t-afhq"><i class="fas fa-cat"></i> AFHQ sweep</button>
+        <button class="tab" data-target="t-fine"><i class="fas fa-film"></i> N = 1 &rarr; 100</button>
+      </div>
+
+      <div class="panel active" id="t-steps">
+        <figure>
+          <img src="./static/images/fig3_ode_steps.jpg" loading="lazy"
+               alt="Effect of the number of ODE steps on AFHQ-Cat deblurring">
+          <figcaption class="caption">
+            <b>AFHQ-Cat deblurring.</b> Values below each reconstruction report PSNR/LPIPS for the displayed image;
+            the right panel reports averages over the test set. Increasing $N$ improves perceptual quality at the cost
+            of PSNR.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="panel" id="t-celeba">
+        <figure>
+          <img src="./static/images/fig7_tradeoff_celeba.jpg" loading="lazy"
+               alt="Distortion-perception trade-off across all five tasks on CelebA">
+          <figcaption class="caption">
+            <b>CelebA (128&times;128)</b> across all five inverse problems at $N \in \{2,4,10,25\}$.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="panel" id="t-afhq">
+        <figure>
+          <img src="./static/images/fig8_tradeoff_afhq.jpg" loading="lazy"
+               alt="Distortion-perception trade-off across all five tasks on AFHQ">
+          <figcaption class="caption">
+            <b>AFHQ (256&times;256)</b> across all five inverse problems at $N \in \{2,4,10,25\}$.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="panel" id="t-fine">
+        <figure>
+          <img src="./static/images/fig11_inpaint_steps.jpg" loading="lazy" style="max-width: 640px;"
+               alt="CelebA random inpainting reconstructions as the number of sampling steps grows">
+          <figcaption class="caption">
+            <b>Random inpainting</b> as the step count sweeps $N = 1 \to 100$. Texture sharpens monotonically while the
+            estimate drifts away from the posterior mean.
+          </figcaption>
+        </figure>
+        <figure style="margin-top: 1.5rem;">
+          <img src="./static/images/fig13_sr_steps.jpg" loading="lazy" style="max-width: 640px;"
+               alt="CelebA super-resolution reconstructions as the number of sampling steps grows">
+          <figcaption class="caption">
+            <b>&times;2 super-resolution</b> over the same sweep.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== QUANTITATIVE TABLES ==================== -->
+<section class="section" id="tables">
+  <div class="container wide">
+    <div class="card fade-in" data-tabgroup="tables">
+      <h2 class="title">Quantitative Results</h2>
+      <div class="narrow justify">
+        <p>
+          Five restoration tasks, two datasets, 100 test images each. Degradations follow the protocols of PnP-Flow and
+          Flower without modification: denoising at $\sigma = 0.2$; deblurring with a $61 \times 61$ Gaussian kernel;
+          $\times 2$ (CelebA) and $\times 4$ (AFHQ-Cat) super-resolution; random inpainting masking 70% of pixels; and
+          box inpainting with a centered $40\times40$ (CelebA) or $80\times80$ (AFHQ-Cat) mask.
+          All baselines except ISTA-Net and I&sup2;SB enforce measurement consistency at inference time using a
+          pretrained prior.
+        </p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-target="tb-celeba"><i class="fas fa-user"></i> CelebA 128&times;128</button>
+        <button class="tab" data-target="tb-afhq"><i class="fas fa-cat"></i> AFHQ-Cat 256&times;256</button>
+      </div>
+
+      <div class="panel active" id="tb-celeba">
+        <div class="table-scroll">
+          <table class="results">
+<thead>
+<tr class="groups"><th></th><th colspan="3">Denoising</th><th colspan="3">Deblurring</th><th colspan="3">Super-resolution</th><th colspan="3">Random inpainting</th><th colspan="3">Box inpainting</th></tr>
+<tr class="metrics"><th>Method</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th></tr>
+</thead><tbody>
+<tr class="degraded"><td>Degraded</td><td>20.00</td><td>0.348</td><td>0.371</td><td>27.81</td><td>0.740</td><td>0.125</td><td>10.25</td><td>0.183</td><td>0.827</td><td>11.95</td><td>0.196</td><td>1.041</td><td>22.26</td><td>0.743</td><td>0.213</td></tr>
+<tr class="sep-top"><td>PnP-GS</td><td>32.54</td><td>0.908</td><td>0.035</td><td>33.97</td><td>0.924</td><td>0.041</td><td>31.23</td><td>0.890</td><td>0.065</td><td>29.20</td><td>0.875</td><td>0.069</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>PnP-HQS</td><td>32.17</td><td>0.897</td><td>0.044</td><td>34.87</td><td>0.946</td><td>0.033</td><td>32.33</td><td>0.911</td><td>0.075</td><td>32.81</td><td>0.945</td><td>0.023</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>ISTA-Net</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>35.38</td><td>0.950</td><td>0.035</td><td>33.54</td><td>0.937</td><td>0.038</td><td class="second">34.70</td><td>0.960</td><td>0.022</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>DiffPIR</td><td>31.12</td><td>0.883</td><td>0.060</td><td>32.68</td><td>0.910</td><td>0.060</td><td>31.46</td><td>0.893</td><td>0.034</td><td>31.69</td><td>0.916</td><td>0.025</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>I&sup2;SB</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>33.25</td><td>0.924</td><td class="best">0.012</td><td>31.92</td><td>0.891</td><td class="best">0.014</td><td>32.80</td><td>0.938</td><td class="best">0.011</td><td>28.72</td><td>0.803</td><td>0.042</td></tr>
+<tr><td>OT-ODE</td><td>30.49</td><td>0.858</td><td class="second">0.032</td><td>32.96</td><td>0.920</td><td>0.029</td><td>31.34</td><td>0.903</td><td>0.027</td><td>28.65</td><td>0.870</td><td>0.051</td><td>29.37</td><td>0.919</td><td>0.038</td></tr>
+<tr><td>D-Flow</td><td>26.01</td><td>0.606</td><td>0.092</td><td>31.21</td><td>0.854</td><td>0.037</td><td>30.44</td><td>0.843</td><td>0.026</td><td>33.61</td><td>0.942</td><td>0.015</td><td>30.59</td><td>0.898</td><td>0.027</td></tr>
+<tr><td>Flow-Priors</td><td>29.31</td><td>0.767</td><td>0.135</td><td>31.51</td><td>0.857</td><td>0.056</td><td>28.36</td><td>0.715</td><td>0.100</td><td>32.87</td><td>0.943</td><td>0.019</td><td>30.06</td><td>0.859</td><td>0.048</td></tr>
+<tr><td>PnP-Flow1</td><td>31.75</td><td>0.904</td><td>0.044</td><td>34.48</td><td>0.936</td><td>0.039</td><td>31.04</td><td>0.901</td><td>0.045</td><td>33.02</td><td>0.944</td><td>0.018</td><td>30.45</td><td>0.933</td><td>0.037</td></tr>
+<tr><td>PnP-Flow5</td><td>32.24</td><td>0.910</td><td>0.056</td><td>34.80</td><td>0.941</td><td>0.046</td><td>31.44</td><td>0.905</td><td>0.056</td><td>33.95</td><td>0.953</td><td>0.022</td><td>31.06</td><td>0.939</td><td>0.043</td></tr>
+<tr><td>Flower1-OT</td><td>32.22</td><td>0.913</td><td>0.033</td><td>34.95</td><td>0.947</td><td>0.025</td><td>32.30</td><td>0.922</td><td>0.034</td><td>33.05</td><td>0.944</td><td>0.017</td><td>31.17</td><td>0.945</td><td>0.022</td></tr>
+<tr><td>Flower5-OT</td><td>33.07</td><td>0.925</td><td>0.038</td><td>35.65</td><td>0.954</td><td>0.031</td><td>33.03</td><td>0.931</td><td>0.039</td><td>33.92</td><td>0.953</td><td>0.020</td><td>31.85</td><td>0.952</td><td>0.023</td></tr>
+<tr class="ours sep-top"><td>Ours (N=2)</td><td class="best">33.67</td><td class="best">0.932</td><td>0.034</td><td class="best">36.04</td><td class="best">0.957</td><td>0.029</td><td class="best">34.39</td><td class="best">0.949</td><td>0.028</td><td class="best">35.03</td><td class="best">0.963</td><td>0.018</td><td class="best">33.25</td><td class="best">0.960</td><td>0.022</td></tr>
+<tr class="ours"><td>Ours (N=4)</td><td class="second">33.24</td><td class="second">0.928</td><td>0.034</td><td class="second">35.78</td><td class="second">0.956</td><td>0.028</td><td class="second">33.96</td><td class="second">0.946</td><td>0.026</td><td>34.67</td><td class="second">0.962</td><td>0.016</td><td class="second">32.57</td><td class="second">0.958</td><td>0.021</td></tr>
+<tr class="ours"><td>Ours (N=10)</td><td>32.26</td><td>0.914</td><td>0.032</td><td>35.03</td><td>0.950</td><td class="second">0.023</td><td>33.13</td><td>0.937</td><td class="second">0.022</td><td>33.98</td><td>0.956</td><td>0.014</td><td>31.85</td><td>0.953</td><td class="best">0.020</td></tr>
+<tr class="ours"><td>Ours (N=25)</td><td>31.56</td><td>0.901</td><td class="best">0.028</td><td>31.46</td><td>0.848</td><td>0.026</td><td>30.39</td><td>0.837</td><td>0.029</td><td>33.42</td><td>0.951</td><td class="second">0.013</td><td>31.33</td><td>0.947</td><td class="best">0.020</td></tr>
+</tbody></table>
+        </div>
+        <p class="legend">
+          100 CelebA test images. <span class="sw-best">Best</span> and
+          <span class="sw-second">second best</span> among all methods (the degraded reference is excluded).
+          &ndash; marks a setting where a baseline does not apply. Scroll the table sideways on narrow screens.
+        </p>
+      </div>
+
+      <div class="panel" id="tb-afhq">
+        <div class="table-scroll">
+          <table class="results">
+<thead>
+<tr class="groups"><th></th><th colspan="3">Denoising</th><th colspan="3">Deblurring</th><th colspan="3">Super-resolution</th><th colspan="3">Random inpainting</th><th colspan="3">Box inpainting</th></tr>
+<tr class="metrics"><th>Method</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th></tr>
+</thead><tbody>
+<tr class="degraded"><td>Degraded</td><td>20.00</td><td>0.293</td><td>0.529</td><td>24.38</td><td>0.529</td><td>0.436</td><td>11.59</td><td>0.212</td><td>0.867</td><td>13.23</td><td>0.213</td><td>1.082</td><td>21.52</td><td>0.727</td><td>0.215</td></tr>
+<tr class="sep-top"><td>PnP-GS</td><td class="second">33.00</td><td>0.895</td><td class="second">0.078</td><td>28.39</td><td>0.787</td><td>0.387</td><td>24.44</td><td>0.639</td><td>0.411</td><td>29.82</td><td>0.844</td><td>0.143</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>PnP-HQS</td><td>32.69</td><td>0.896</td><td>0.108</td><td>29.34</td><td>0.793</td><td>0.362</td><td>26.58</td><td>0.724</td><td>0.441</td><td>33.07</td><td>0.916</td><td>0.051</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>ISTA-Net</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>29.36</td><td>0.790</td><td>0.342</td><td>28.22</td><td>0.784</td><td>0.297</td><td>34.10</td><td>0.929</td><td>0.049</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>DiffPIR</td><td>31.05</td><td>0.839</td><td>0.186</td><td>28.24</td><td>0.747</td><td>0.319</td><td>24.24</td><td>0.650</td><td>0.385</td><td>32.31</td><td>0.886</td><td>0.057</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>I&sup2;SB</td><td>&ndash;</td><td>&ndash;</td><td>&ndash;</td><td>27.72</td><td>0.725</td><td class="best">0.077</td><td>27.19</td><td>0.739</td><td class="best">0.070</td><td>31.79</td><td>0.879</td><td class="best">0.026</td><td>27.32</td><td>0.763</td><td>0.072</td></tr>
+<tr><td>OT-ODE</td><td>30.48</td><td>0.818</td><td>0.081</td><td>27.82</td><td>0.735</td><td>0.126</td><td>26.71</td><td>0.737</td><td class="second">0.108</td><td>29.99</td><td>0.849</td><td>0.087</td><td>24.47</td><td>0.873</td><td>0.095</td></tr>
+<tr><td>D-Flow</td><td>26.44</td><td>0.573</td><td>0.180</td><td>28.60</td><td>0.746</td><td>0.167</td><td>25.20</td><td>0.616</td><td>0.188</td><td>32.79</td><td>0.898</td><td>0.044</td><td>27.02</td><td>0.840</td><td>0.081</td></tr>
+<tr><td>Flow-Priors</td><td>29.67</td><td>0.756</td><td>0.165</td><td>27.28</td><td>0.726</td><td>0.188</td><td>23.95</td><td>0.566</td><td>0.274</td><td>32.95</td><td>0.909</td><td>0.051</td><td>26.13</td><td>0.809</td><td>0.130</td></tr>
+<tr><td>PnP-Flow1</td><td>31.62</td><td>0.866</td><td>0.139</td><td>28.71</td><td>0.779</td><td>0.285</td><td>27.56</td><td>0.780</td><td>0.158</td><td>33.71</td><td>0.923</td><td>0.038</td><td>26.45</td><td>0.895</td><td>0.111</td></tr>
+<tr><td>PnP-Flow5</td><td>31.87</td><td>0.868</td><td>0.170</td><td>29.01</td><td>0.785</td><td>0.312</td><td>28.01</td><td>0.791</td><td>0.167</td><td class="second">34.44</td><td class="second">0.932</td><td>0.045</td><td>27.14</td><td>0.900</td><td>0.127</td></tr>
+<tr><td>Flower1-OT</td><td>32.12</td><td>0.881</td><td>0.113</td><td>29.38</td><td>0.793</td><td>0.237</td><td>26.76</td><td>0.759</td><td>0.262</td><td>33.68</td><td>0.922</td><td>0.042</td><td>26.67</td><td>0.914</td><td>0.065</td></tr>
+<tr><td>Flower5-OT</td><td>32.75</td><td>0.892</td><td>0.126</td><td class="second">29.73</td><td class="second">0.801</td><td>0.264</td><td>27.09</td><td>0.767</td><td>0.272</td><td>34.36</td><td>0.931</td><td>0.048</td><td>27.32</td><td class="second">0.922</td><td>0.067</td></tr>
+<tr class="ours sep-top"><td>Ours (N=2)</td><td class="best">33.31</td><td class="best">0.904</td><td>0.081</td><td class="best">29.89</td><td class="best">0.809</td><td>0.229</td><td class="best">29.10</td><td class="best">0.816</td><td>0.167</td><td class="best">34.71</td><td class="best">0.936</td><td>0.043</td><td class="best">29.27</td><td class="best">0.924</td><td>0.060</td></tr>
+<tr class="ours"><td>Ours (N=4)</td><td>32.93</td><td class="second">0.898</td><td>0.079</td><td>29.42</td><td>0.796</td><td>0.188</td><td class="second">28.50</td><td class="second">0.801</td><td>0.141</td><td>34.30</td><td>0.932</td><td>0.039</td><td class="second">28.65</td><td>0.921</td><td class="second">0.052</td></tr>
+<tr class="ours"><td>Ours (N=10)</td><td>31.96</td><td>0.879</td><td class="best">0.072</td><td>28.72</td><td>0.775</td><td>0.145</td><td>27.75</td><td>0.777</td><td>0.115</td><td>33.53</td><td>0.922</td><td>0.033</td><td>27.94</td><td>0.916</td><td class="best">0.047</td></tr>
+<tr class="ours"><td>Ours (N=25)</td><td>29.69</td><td>0.776</td><td>0.081</td><td>28.16</td><td>0.754</td><td class="second">0.119</td><td>26.54</td><td>0.676</td><td>0.121</td><td>32.91</td><td>0.912</td><td class="second">0.030</td><td>26.76</td><td>0.819</td><td>0.077</td></tr>
+</tbody></table>
+        </div>
+        <p class="legend">
+          100 AFHQ-Cat test images. <span class="sw-best">Best</span> and
+          <span class="sw-second">second best</span> among all methods (the degraded reference is excluded).
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== ABLATIONS & ROBUSTNESS ==================== -->
+<section class="section" id="ablations">
+  <div class="container wide">
+    <div class="card fade-in" data-tabgroup="abl">
+      <h2 class="title">Ablations and Robustness</h2>
+
+      <div class="tabs">
+        <button class="tab active" data-target="a-k"><i class="fas fa-layer-group"></i> Iteration depth K</button>
+        <button class="tab" data-target="a-noise"><i class="fas fa-wave-square"></i> Noise mismatch</button>
+        <button class="tab" data-target="a-mask"><i class="fas fa-table-cells"></i> Operator mismatch</button>
+      </div>
+
+      <div class="panel active" id="a-k">
+        <div class="narrow justify">
+          <p>
+            $K$ controls how many data-consistency / prior alternations happen inside one velocity evaluation.
+            PSNR keeps improving with $K$ while LPIPS bottoms out at $K = 5$. Since cost scales as $O(NK)$, we use
+            $K = 5$ throughout&mdash;roughly 70% of the cost of $K = 7$ for essentially the same quality.
+          </p>
+        </div>
+        <div class="table-scroll" style="margin-top: 1.25rem;"><table class="results compact"><thead><tr class="metrics"><th>K</th><th>PSNR &uarr;</th><th>SSIM &uarr;</th><th>LPIPS &darr;</th><th>Time (ms) &darr;</th></tr></thead><tbody><tr><td>3</td><td>34.63</td><td>0.959</td><td>0.020</td><td>137</td></tr><tr><td><b>5</b></td><td><b>35.03</b></td><td><b>0.963</b></td><td><b>0.018</b></td><td><b>223</b></td></tr><tr><td>7</td><td>35.21</td><td>0.964</td><td>0.019</td><td>322</td></tr></tbody></table></div>
+        <p class="legend">Random inpainting, $N = 2$.</p>
+      </div>
+
+      <div class="panel" id="a-noise">
+        <div class="narrow justify">
+          <p>
+            Training with a fixed forward model ties the learned field to a particular $A$ and $\sigma$. A model trained
+            at $\sigma = 0.01$ and evaluated at other noise levels still outperforms the operator-agnostic Flower5-OT on
+            all three metrics, at both tested levels.
+          </p>
+        </div>
+        <div class="table-scroll" style="margin-top: 1.25rem;"><table class="results compact"><thead><tr class="metrics"><th>Method</th><th>&sigma;<sub>test</sub>=0.005 &middot; PSNR &uarr;</th><th>SSIM &uarr;</th><th>LPIPS &darr;</th><th>&sigma;<sub>test</sub>=0.02 &middot; PSNR &uarr;</th><th>SSIM &uarr;</th><th>LPIPS &darr;</th></tr></thead><tbody><tr><td>Flower5-OT</td><td>34.02</td><td>0.954</td><td>0.019</td><td>33.65</td><td>0.947</td><td>0.024</td></tr><tr class="ours"><td>Ours</td><td><b>35.19</b></td><td><b>0.965</b></td><td><b>0.018</b></td><td><b>34.57</b></td><td><b>0.954</b></td><td><b>0.020</b></td></tr></tbody></table></div>
+      </div>
+
+      <div class="panel" id="a-mask">
+        <div class="narrow justify">
+          <p>
+            A model trained at a 0.7 inpainting mask ratio, applied without retraining to ratios from 0.5 to 0.8.
+            Quality is monotone in the test ratio with no failure mode at either extreme. Because we do not train a
+            matched model per ratio, this measures graceful degradation rather than quantifying the mismatch penalty.
+            At test time the data-consistency step uses the actual test mask, while the learned regularizer and the
+            step-size parameters stay fixed at their $p = 0.7$ values.
+          </p>
+        </div>
+        <div class="table-scroll" style="margin-top: 1.25rem;"><table class="results compact"><thead><tr class="metrics"><th>Test mask ratio p</th><th>PSNR &uarr;</th><th>SSIM &uarr;</th><th>LPIPS &darr;</th></tr></thead><tbody><tr><td>0.5</td><td>38.26</td><td>0.978</td><td>0.008</td></tr><tr><td>0.6</td><td>36.95</td><td>0.973</td><td>0.012</td></tr><tr><td>0.7 &dagger; <span class='muted'>(training ratio)</span></td><td>35.03</td><td>0.963</td><td>0.018</td></tr><tr><td>0.8</td><td>32.10</td><td>0.936</td><td>0.034</td></tr></tbody></table></div>
+        <figure style="margin-top: 1.75rem;">
+          <img src="./static/images/fig6_operator_mismatch.jpg" loading="lazy" style="max-width: 720px;"
+               alt="Reconstructions under forward-model mismatch on random inpainting">
+          <figcaption class="caption">
+            Reconstructions under forward-model mismatch on CelebA random inpainting, test mask ratios 0.5&ndash;0.8.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== POSTERIOR BEHAVIOUR ==================== -->
+<section class="section" id="posterior">
+  <div class="container wide">
+    <div class="card fade-in" data-tabgroup="post">
+      <h2 class="title">Does the Flow Really Reach the Posterior?</h2>
+      <div class="narrow justify">
+        <p>
+          Proposition&nbsp;1 says the ideal field transports the source to $p(x_1 \mid y)$, not to a single point
+          estimate. Two experiments check that the trained model inherits this behaviour.
+        </p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-target="p-div"><i class="fas fa-shuffle"></i> Sample diversity</button>
+        <button class="tab" data-target="p-toy"><i class="fas fa-chart-area"></i> Toy problem</button>
+        <button class="tab" data-target="p-traj"><i class="fas fa-route"></i> Solver trajectory</button>
+      </div>
+
+      <div class="panel active" id="p-div">
+        <figure>
+          <img src="./static/images/fig14_diversity.jpg" loading="lazy"
+               alt="Posterior sample diversity on box inpainting; variation is confined to the masked region">
+          <figcaption class="caption">
+            <b>Box inpainting, CelebA.</b> The measurement $y$ is held fixed and only the source draw
+            $x_0 \sim \mathcal{N}(0,I)$ varies. Columns show ground truth, measurement, three of eight reconstructions
+            at $N\!=\!2$, the pixel-wise standard deviation over all eight, and the same at $N\!=\!25$. Variation is
+            confined to the masked region and vanishes where measurements are available&mdash;exactly what
+            transporting to the measurement-conditioned posterior predicts. Longer integration widens the spread,
+            which is why LPIPS improves and PSNR drops.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="panel" id="p-toy">
+        <figure>
+          <img src="./static/images/fig4_toy_posterior.png" loading="lazy" style="max-width: 680px;"
+               alt="Toy problem: samples against the analytical posterior">
+          <figcaption class="caption">
+            A two-dimensional problem where the posterior is available in closed form. At $N\!=\!50$ the generated
+            samples (blue) match the analytical posterior (red) in both modes, while the MMSE mean sits in the
+            low-density valley between them&mdash;the model is sampling, not regressing to the mean.
+          </figcaption>
+        </figure>
+        <figure style="margin-top: 1.5rem;">
+          <img src="./static/images/fig5_toy_vs_N.png" loading="lazy" style="max-width: 760px;"
+               alt="Posterior recovery degrades smoothly as the number of sampling steps drops">
+          <figcaption class="caption">
+            Posterior recovery degrades <em>smoothly</em> as $N$ drops: the Wasserstein-1 gap to the true posterior
+            grows and mass collapses toward the mean. Few steps buy distortion performance by giving up sample
+            fidelity, which is the same trade-off the image experiments show.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="panel" id="p-traj">
+        <figure>
+          <img src="./static/images/fig16_solver_trajectory.jpg" loading="lazy" style="max-width: 660px;"
+               alt="Internal solver trajectory across Euler steps and inner HQS iterations">
+          <figcaption class="caption">
+            <b>Inside the solver.</b> Box inpainting with $N\!=\!2$ Euler steps and $K\!=\!5$ inner iterations each.
+            Rows are Euler steps labelled by $t$; columns walk the inner iterations, showing the data-consistency
+            iterate $x^k$ above the damped learned update $z^k$.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== ACKNOWLEDGMENTS ==================== -->
+<section class="section" id="acknowledgments">
+  <div class="container">
+    <div class="card fade-in">
+      <h2 class="title">Acknowledgments</h2>
+      <div class="narrow justify">
+        <p>
+          This work was supported in part by the National Science Foundation under CAREER award CCF-2625643 and
+          award CCF-2622128.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== BIBTEX ==================== -->
+<section class="section" id="BibTeX">
+  <div class="container">
+    <div class="card fade-in">
+      <h2 class="title">BibTeX</h2>
+      <div class="bibtex-wrapper">
+        <button class="bibtex-copy-btn" onclick="copyBibtex(this)" title="Copy to clipboard">
+          <i class="fas fa-copy"></i><span>Copy</span>
+        </button>
+<pre><code id="bibtex-code">@misc{shoushtari2026firm,
+  title         = {FIRM: Flow-based Imaging via Regularized Minimization},
+  author        = {Shoushtari, Shirin and Chandler, Edward P. and Shi, Xiao
+                   and Kamilov, Ulugbek S.},
+  year          = {2026},
+  journal        = {arXiv 2609.12953}
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+  <div class="container">
+    <p>
+      This website is licensed under a
+      <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons
+      Attribution-ShareAlike 4.0 International License</a>. The page layout is adapted from
+      <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a>.
+    </p>
+    <p>
+      Computational Imaging Group (CIG) &middot; UW-Madison
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
